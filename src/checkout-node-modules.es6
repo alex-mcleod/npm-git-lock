@@ -6,11 +6,13 @@ let fs = require(`fs`);
 let promisify = require(`es6-promisify`);
 let log = require(`loglevel`);
 let crypto = require(`crypto`);
+let {exec} = require('child_process');
 
 let readFilePromise = promisify(fs.readFile);
 let npmiPromise = promisify(npmi);
 let delPromise = promisify(del);
 let statPromise = promisify(fs.stat);
+let execPromise = promisify(exec);
 
 
 module.exports = (cwd, repo, verbose) => {
@@ -50,7 +52,7 @@ module.exports = (cwd, repo, verbose) => {
             log.debug(`Cleanup checked out commit`);
             return git(`clean -df`);
         })
-        .catch(installPackagesTagAndPustToRemote);
+        .catch(installPackagesTagAndPushToRemote);
     })
     .then(() => {
         process.chdir(`${cwd}`);
@@ -73,12 +75,14 @@ module.exports = (cwd, repo, verbose) => {
         })
     }
 
-    function installPackagesTagAndPustToRemote() {
+    function installPackagesTagAndPushToRemote() {
         log.debug(`Requested tag does not exist, remove everything from node_modules and do npm install`);
         return git(`checkout master`)
-        .then(() => {
-            return delPromise([`**`, `!.git/`])
-        })
+        // Seems unnecessary and also could result in packages getting updated
+        // unexpectedly.
+        // .then(() => {
+        //     return delPromise([`**`, `!.git/`])
+        // })
         .then(() => {
             let options = {
                 forceInstall: false,
@@ -88,6 +92,10 @@ module.exports = (cwd, repo, verbose) => {
             };
             process.chdir(`${cwd}`);
             return npmiPromise(options);
+        })
+        .then(() => {
+          // Remove extraneous packages
+          return execPromise('npm prune');
         })
         .then(() => {
             log.debug(`All packages installed`);
@@ -107,6 +115,3 @@ module.exports = (cwd, repo, verbose) => {
         })
     }
 };
-
-
-
